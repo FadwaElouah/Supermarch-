@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-use OpenApi\Annotations as OA;
+
 
 use App\Http\Controllers\Controller;
 use App\Models\Produit;
@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Notification;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\LowStockAlert;
 
 
 
@@ -384,32 +386,52 @@ public function search(Request $request)
 
 
     public function checkLowStockProducts()
-{
-    $lowStockProducts = Produit::whereHas('stock', function ($query) {
-        $query->whereRaw('quantite <= seuil_alerte');
-    })->with(['stock'])->get();
+    {
+        try {
+            $lowStockProducts = Produit::whereHas('stock', function ($query) {
+                $query->whereRaw('quantite <= seuil_alerte');
+            })->with(['stock'])->get();
 
-    $admins = User::where('role', 'admin')->get();
+            $admins = User::where('role', 'admin')->get();
 
-    foreach ($lowStockProducts as $product) {
-        foreach ($admins as $admin) {
-            Notification::create([
-                'user_id' => $admin->id,
-                'title' => 'Alerte de stock faible',
-                'message' => "Le produit {$product->nom} doit être réapprovisionné",
-                'type' => 'low_stock',
-                'data' => [
-                    'product_id' => $product->id,
-                    'current_quantity' => $product->stock->quantite,
-                    'threshold' => $product->stock->seuil_alerte
-                ]
+            foreach ($lowStockProducts as $product) {
+                foreach ($admins as $admin) {
+                    // Créer une notification dans la base de données
+                    Notification::create([
+                        'user_id' => $admin->id,
+                        'title' => 'Alerte de stock faible',
+                        'message' => "Le produit {$product->nom} a besoin d’être réapprovisionné",
+                        'type' => 'low_stock',
+                        'data' => [
+                            'product_id' => $product->id,
+                            'current_quantity' => $product->stock->quantite,
+                            'threshold' => $product->stock->seuil_alerte
+                        ]
+                    ]);
+
+                    // Envoi d'un e-mail (optionnel)
+                    try {
+                        Mail::to($admin->email)->send(
+                            new LowStockAlert($product)
+                        );
+                    } catch (\Exception $e) {
+                        // Enregistrer l'erreur sans interrompre le processus
+                        \Log::error('Échec de l’envoi de l’e-mail : ' . $e->getMessage());
+                    }
+                }
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Vérification du stock effectuée'
             ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Une erreur s’est produite lors de la vérification du stock',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
-    return response()->json([
-        'status' => 'success',
-        'message' =>'Stock vérifié'
-    ]);
-}
 }

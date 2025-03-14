@@ -26,6 +26,7 @@ Route::get('/produits/search', [ProduitController::class, 'search']);
 // Route::get('/admin/produits', [ProduitController::class, 'index']);
 
 Route::get('/rayons', [RayonController::class, 'index']);
+Route::get('/produits', [ProduitController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
