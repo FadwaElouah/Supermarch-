@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Exceptions;
-
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
@@ -21,10 +21,15 @@ class Handler extends ExceptionHandler
     /**
      * Register the exception handling callbacks for the application.
      */
-    public function register(): void
-    {
-        $this->reportable(function (Throwable $e) {
-            //
-        });
-    }
+   public function register()
+{
+    $this->renderable(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Non authentifié'
+            ], 401);
+        }
+    });
+}
 }
